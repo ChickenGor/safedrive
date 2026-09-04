@@ -1,0 +1,13 @@
+# Local Python environments and generated Python files
+.venv/
+__pycache__/
+*.py[cod]
+
+# Large local assets and generated demo outputs
+models/**/*.pt
+models/**/*.onnx
+outputs/*
+!outputs/.gitkeep
+
+# Raw datasets must remain outside this application repository.
+data/

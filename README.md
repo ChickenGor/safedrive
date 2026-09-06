@@ -100,10 +100,11 @@ fixed, explainable heuristic rather than lane segmentation. Enable the browser
 checkbox or add `--show-forward-zone` to a CLI command only when explaining the
 collision-risk rule in a presentation.
 
-The browser interface can also speak a confirmed warning using the phone or
-laptop browser's local text-to-speech engine. It speaks only the highest warning
-selected by the warning manager. For uploaded videos, the alert is announced
-after analysis finishes; the saved MP4 does not claim to contain real-time audio.
+The browser interface can play three fast beeps for a confirmed warning using
+the phone or laptop browser's local audio engine. It triggers only for the
+highest warning selected by the warning manager. For uploaded videos, the alert
+plays after analysis finishes; the saved MP4 does not claim to contain real-time
+audio.
 
 For video only, SafeDrive applies a conservative road-hazard presentation filter:
 it ignores the lower dashboard strip and requires a matched hazard to persist and

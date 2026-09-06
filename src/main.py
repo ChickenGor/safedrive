@@ -4,10 +4,12 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
 import sys
 
 import cv2
 import numpy as np
+from imageio_ffmpeg import get_ffmpeg_exe
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = Path(__file__).resolve().parent
@@ -31,6 +33,27 @@ from road_hazard.detector import HazardDetection, RoadHazardDetector  # noqa: E4
 from warning.warning_manager import WarningManager  # noqa: E402
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+
+def _make_browser_playable_video(intermediate: Path, destination: Path) -> None:
+    """Encode OpenCV's temporary MP4 as H.264 for Chrome/Gradio playback.
+
+    OpenCV commonly writes ``mp4v`` on Windows. It is readable by OpenCV but is
+    not reliably supported by browsers, so the web demo would show
+    "Video not playable". The bundled FFmpeg supplied by imageio-ffmpeg writes
+    a standards-compatible H.264/yuv420p MP4. Original audio is intentionally
+    omitted because this prototype supplies its own optional warning voice.
+    """
+    command = [
+        get_ffmpeg_exe(), "-y", "-i", str(intermediate),
+        "-map", "0:v:0", "-an", "-c:v", "libx264", "-preset", "veryfast",
+        "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+        str(destination),
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    if completed.returncode != 0:
+        details = completed.stderr.strip().splitlines()[-1] if completed.stderr else "unknown FFmpeg error"
+        raise RuntimeError(f"Could not create browser-playable MP4: {details}")
 
 
 @dataclass
@@ -259,7 +282,11 @@ def process_video(
         raise ValueError(f"Could not open video: {source}")
     width, height = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)), int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
-    writer = cv2.VideoWriter(str(destination), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+    intermediate = destination.with_name(f"{destination.stem}_intermediate.mp4")
+    writer = cv2.VideoWriter(str(intermediate), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+    if not writer.isOpened():
+        capture.release()
+        raise RuntimeError(f"Could not open output video writer: {intermediate}")
     # A video is a fresh scene; do not carry collision tracks from a prior image
     # or an earlier browser upload into its temporal risk assessment.
     collision_detector = pipeline[1]
@@ -288,6 +315,8 @@ def process_video(
     finally:
         capture.release()
         writer.release()
+    _make_browser_playable_video(intermediate, destination)
+    intermediate.unlink(missing_ok=True)
     return highest_warning.message if highest_warning is not None else ""
 
 

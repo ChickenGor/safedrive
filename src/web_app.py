@@ -110,8 +110,10 @@ def build_demo() -> gr.Blocks:
 
         with gr.Tab("Analyse video"):
             with gr.Row():
-                video_input = gr.Video(label="Dashcam video", format="mp4")
-                video_output = gr.Video(label="SafeDrive result", format="mp4")
+                # Do not ask Gradio to transcode an upload before analysis.
+                # The pipeline itself returns a browser-compatible H.264 MP4.
+                video_input = gr.Video(label="Dashcam video")
+                video_output = gr.Video(label="SafeDrive result")
             frame_stride = gr.Slider(
                 minimum=1,
                 maximum=6,

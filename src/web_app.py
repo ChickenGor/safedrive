@@ -169,12 +169,14 @@ def build_demo() -> gr.Blocks:
         )
         with gr.Tab("Analyse image"):
             with gr.Row():
-                image_input = gr.Image(label="Dashcam image", type="filepath")
-                image_output = gr.Image(label="SafeDrive result", type="filepath")
-            image_button = gr.Button("Analyse image", variant="primary")
-            image_status = gr.Textbox(label="Status", interactive=False)
-            image_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
-            image_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
+                with gr.Column(scale=1):
+                    image_input = gr.Image(label="Dashcam image", type="filepath")
+                    image_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
+                    image_button = gr.Button("Analyse image", variant="primary")
+                with gr.Column(scale=1):
+                    image_output = gr.Image(label="SafeDrive result", type="filepath")
+                    image_status = gr.Textbox(label="Status", interactive=False)
+                    image_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
             image_button.click(
                 analyse_image,
                 inputs=[image_input, image_zone],
@@ -183,42 +185,46 @@ def build_demo() -> gr.Blocks:
 
         with gr.Tab("Analyse video"):
             with gr.Row():
-                # Do not ask Gradio to transcode an upload before analysis.
-                # The pipeline itself returns a browser-compatible H.264 MP4.
-                video_input = gr.Video(label="Dashcam video")
-                video_output = gr.Video(label="SafeDrive result")
-            frame_stride = gr.Slider(
-                minimum=1,
-                maximum=30,
-                value=4,
-                step=1,
-                label="Analysis interval (frames)",
-                info="1 = analyse every frame (most reliable); 3–6 = recommended fast demo; 30 = rough preview only.",
-            )
-            video_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
-            with gr.Accordion("Manually adjust forward-risk zone for this video", open=False):
-                gr.Markdown("Adjust the preview first, then analyse. This calibration changes the forward-risk rule for this upload; it is not automatic lane detection.")
-                zone_mode = gr.Radio(
-                    ["Symmetric guide", "Advanced four-corner"],
-                    value="Symmetric guide", label="Calibration mode",
-                )
-                zone_top_y = gr.Slider(0.35, 0.75, value=0.58, step=0.01, label="Top edge height")
-                zone_top_width = gr.Slider(0.05, 0.30, value=0.07, step=0.01, label="Top half-width")
-                zone_bottom_width = gr.Slider(0.20, 0.48, value=0.30, step=0.01, label="Bottom half-width")
-                with gr.Row():
-                    zone_top_left_x = gr.Slider(0.0, 0.50, value=0.43, step=0.01, label="Top-left X")
-                    zone_top_left_y = gr.Slider(0.20, 0.85, value=0.58, step=0.01, label="Top-left Y")
-                    zone_top_right_x = gr.Slider(0.50, 1.0, value=0.57, step=0.01, label="Top-right X")
-                    zone_top_right_y = gr.Slider(0.20, 0.85, value=0.58, step=0.01, label="Top-right Y")
-                with gr.Row():
-                    zone_bottom_right_x = gr.Slider(0.50, 1.0, value=0.80, step=0.01, label="Bottom-right X")
-                    zone_bottom_right_y = gr.Slider(0.60, 1.0, value=0.98, step=0.01, label="Bottom-right Y")
-                    zone_bottom_left_x = gr.Slider(0.0, 0.50, value=0.20, step=0.01, label="Bottom-left X")
-                    zone_bottom_left_y = gr.Slider(0.60, 1.0, value=0.98, step=0.01, label="Bottom-left Y")
-                zone_preview = gr.Image(label="Live zone preview (first video frame)", type="numpy", interactive=False)
-            video_button = gr.Button("Analyse video", variant="primary")
-            video_status = gr.Textbox(label="Status", interactive=False)
-            video_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
+                with gr.Column(scale=1):
+                    # Do not ask Gradio to transcode an upload before analysis.
+                    # The pipeline itself returns a browser-compatible H.264 MP4.
+                    video_input = gr.Video(label="Dashcam video")
+                    frame_stride = gr.Slider(
+                        minimum=1,
+                        maximum=30,
+                        value=4,
+                        step=1,
+                        label="Analysis interval (frames)",
+                        info="1 = analyse every frame (most reliable); 3–6 = recommended fast demo; 30 = rough preview only.",
+                    )
+                    video_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
+                    with gr.Accordion("Manually adjust forward-risk zone for this video", open=False):
+                        gr.Markdown("Adjust the preview first, then analyse. This calibration changes the forward-risk rule for this upload; it is not automatic lane detection.")
+                        zone_mode = gr.Radio(
+                            ["Symmetric guide", "Advanced four-corner"],
+                            value="Symmetric guide", label="Calibration mode",
+                        )
+                        zone_top_y = gr.Slider(0.35, 0.75, value=0.58, step=0.01, label="Top edge height")
+                        zone_top_width = gr.Slider(0.05, 0.30, value=0.07, step=0.01, label="Top half-width")
+                        zone_bottom_width = gr.Slider(0.20, 0.48, value=0.30, step=0.01, label="Bottom half-width")
+                        with gr.Row():
+                            zone_top_left_x = gr.Slider(0.0, 0.50, value=0.43, step=0.01, label="Top-left X")
+                            zone_top_left_y = gr.Slider(0.20, 0.85, value=0.58, step=0.01, label="Top-left Y")
+                        with gr.Row():
+                            zone_top_right_x = gr.Slider(0.50, 1.0, value=0.57, step=0.01, label="Top-right X")
+                            zone_top_right_y = gr.Slider(0.20, 0.85, value=0.58, step=0.01, label="Top-right Y")
+                        with gr.Row():
+                            zone_bottom_right_x = gr.Slider(0.50, 1.0, value=0.80, step=0.01, label="Bottom-right X")
+                            zone_bottom_right_y = gr.Slider(0.60, 1.0, value=0.98, step=0.01, label="Bottom-right Y")
+                        with gr.Row():
+                            zone_bottom_left_x = gr.Slider(0.0, 0.50, value=0.20, step=0.01, label="Bottom-left X")
+                            zone_bottom_left_y = gr.Slider(0.60, 1.0, value=0.98, step=0.01, label="Bottom-left Y")
+                        zone_preview = gr.Image(label="Live zone preview (first video frame)", type="numpy", interactive=False)
+                    video_button = gr.Button("Analyse video", variant="primary")
+                with gr.Column(scale=1):
+                    video_output = gr.Video(label="SafeDrive result")
+                    video_status = gr.Textbox(label="Status", interactive=False)
+                    video_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
             video_button.click(
                 analyse_video,
                 inputs=[

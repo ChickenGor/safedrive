@@ -103,8 +103,9 @@ collision-risk rule in a presentation.
 Exported videos remove the original dashcam audio. Each confirmed warning adds
 three embedded beeps at the relevant point: fast for a red HIGH forward-collision
 warning, slower for yellow MEDIUM/road-hazard warnings, and none for green LOW
-detections. Repeating warnings are rate-limited to one alert every two seconds;
-this is a prototype notification, not a real-time safety system.
+detections. Red warnings may repeat after two seconds; a yellow warning beeps
+only when it begins or changes type. This is a prototype notification, not a
+real-time safety system.
 
 For video only, SafeDrive applies a conservative road-hazard presentation filter:
 it ignores the lower dashboard strip and requires a matched hazard to persist and

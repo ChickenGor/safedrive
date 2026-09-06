@@ -346,17 +346,17 @@ def process_video(
                 latest_warning = warning
                 if warning is not None and (highest_warning is None or warning.priority < highest_warning.priority):
                     highest_warning = warning
-                # Keep beeps meaningful: play when a warning begins/changes, or
-                # at most once every two seconds for a continuing warning.
+                # Keep beeps meaningful: a red collision risk may repeat after
+                # two seconds, but a yellow warning beeps only when it begins or
+                # changes category (for example, from crack to pothole).
                 if warning is not None and (
-                    warning.message != last_alert_message or frame_number - last_alert_frame >= int(2 * fps)
+                    warning.message != last_alert_message
+                    or (warning.priority == 1 and frame_number - last_alert_frame >= int(2 * fps))
                 ):
                     severity = "red" if warning.priority == 1 else "yellow"
                     alerts.append((frame_number / fps, severity))
                     last_alert_frame = frame_number
                     last_alert_message = warning.message
-                elif warning is None:
-                    last_alert_message = ""
             # Preserve every original video frame. In fast mode, the overlay is
             # simply held between detector updates instead of freezing the scene.
             writer.write(

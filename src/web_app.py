@@ -50,7 +50,6 @@ def _manual_forward_region(
     bottom_right_y: float,
     bottom_left_x: float,
     bottom_left_y: float,
-    sensitive_pothole_mode: bool,
 ) -> tuple[tuple[float, float], ...]:
     """Build the user-calibrated four-corner forward-risk polygon."""
     return (
@@ -83,6 +82,7 @@ def analyse_video(
     bottom_right_y: float,
     bottom_left_x: float,
     bottom_left_y: float,
+    sensitive_pothole_mode: bool,
 ) -> tuple[str, str, str]:
     """Run the existing sequential video pipeline and return its annotated video."""
     source = _require_upload(upload, "dashcam video")

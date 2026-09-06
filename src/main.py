@@ -36,14 +36,19 @@ from warning.warning_manager import WarningManager  # noqa: E402
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
-def _write_warning_audio(destination: Path, duration_seconds: float, alert_times: list[float]) -> None:
-    """Create a silent track with three quick tones at each confirmed warning."""
+def _write_warning_audio(
+    destination: Path, duration_seconds: float, alerts: list[tuple[float, str]]
+) -> None:
+    """Create an alert-only audio track: slow yellow beeps, fast red beeps."""
     sample_rate = 44_100
     samples = np.zeros(max(1, int(np.ceil(duration_seconds * sample_rate))), dtype=np.int16)
-    tone_length = int(0.11 * sample_rate)
-    tone = (np.sin(2 * np.pi * 880 * np.arange(tone_length) / sample_rate) * 9_000).astype(np.int16)
-    for alert_time in alert_times:
-        for offset in (0.0, 0.16, 0.32):
+    for alert_time, severity in alerts:
+        # HIGH forward-collision warnings are red and fast. MEDIUM collision
+        # and road-hazard warnings are yellow and deliberately slower.
+        frequency, offsets = (880, (0.0, 0.16, 0.32)) if severity == "red" else (660, (0.0, 0.35, 0.70))
+        tone_length = int(0.11 * sample_rate)
+        tone = (np.sin(2 * np.pi * frequency * np.arange(tone_length) / sample_rate) * 9_000).astype(np.int16)
+        for offset in offsets:
             start = int((alert_time + offset) * sample_rate)
             end = min(start + tone_length, len(samples))
             if start < len(samples):
@@ -56,7 +61,7 @@ def _write_warning_audio(destination: Path, duration_seconds: float, alert_times
 
 
 def _make_browser_playable_video(
-    intermediate: Path, destination: Path, duration_seconds: float, alert_times: list[float]
+    intermediate: Path, destination: Path, duration_seconds: float, alerts: list[tuple[float, str]]
 ) -> None:
     """Encode OpenCV's temporary MP4 as H.264 for Chrome/Gradio playback.
 
@@ -67,7 +72,7 @@ def _make_browser_playable_video(
     omitted; the output contains only generated beep alerts for confirmed warnings.
     """
     warning_audio = intermediate.with_suffix(".warning.wav")
-    _write_warning_audio(warning_audio, duration_seconds, alert_times)
+    _write_warning_audio(warning_audio, duration_seconds, alerts)
     command = [
         get_ffmpeg_exe(), "-y", "-i", str(intermediate), "-i", str(warning_audio),
         "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "veryfast",
@@ -222,7 +227,7 @@ def annotate_frame(frame, hazards, collision_risks, warning, show_forward_zone: 
             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2,
         )
     if warning is not None:
-        color = (0, 0, 255) if warning.category == "collision" else (0, 165, 255)
+        color = (0, 0, 255) if warning.priority == 1 else (0, 165, 255)
         cv2.putText(
             frame, warning.message, (20, 35),
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2,
@@ -321,7 +326,7 @@ def process_video(
     frame_number = 0
     latest_output = None
     highest_warning = None
-    alert_times: list[float] = []
+    alerts: list[tuple[float, str]] = []
     last_alert_frame = -1_000_000
     last_alert_message = ""
     try:
@@ -343,7 +348,8 @@ def process_video(
                 if warning is not None and (
                     warning.message != last_alert_message or frame_number - last_alert_frame >= int(2 * fps)
                 ):
-                    alert_times.append(frame_number / fps)
+                    severity = "red" if warning.priority == 1 else "yellow"
+                    alerts.append((frame_number / fps, severity))
                     last_alert_frame = frame_number
                     last_alert_message = warning.message
                 elif warning is None:
@@ -353,7 +359,7 @@ def process_video(
     finally:
         capture.release()
         writer.release()
-    _make_browser_playable_video(intermediate, destination, frame_number / fps, alert_times)
+    _make_browser_playable_video(intermediate, destination, frame_number / fps, alerts)
     intermediate.unlink(missing_ok=True)
     return highest_warning.message if highest_warning is not None else ""
 

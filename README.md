@@ -100,9 +100,10 @@ fixed, explainable heuristic rather than lane segmentation. Enable the browser
 checkbox or add `--show-forward-zone` to a CLI command only when explaining the
 collision-risk rule in a presentation.
 
-Exported videos remove the original dashcam audio. Instead, each confirmed
-warning is represented by three fast beeps embedded at the relevant point in the
-saved MP4. Repeating warnings are rate-limited to one alert every two seconds;
+Exported videos remove the original dashcam audio. Each confirmed warning adds
+three embedded beeps at the relevant point: fast for a red HIGH forward-collision
+warning, slower for yellow MEDIUM/road-hazard warnings, and none for green LOW
+detections. Repeating warnings are rate-limited to one alert every two seconds;
 this is a prototype notification, not a real-time safety system.
 
 For video only, SafeDrive applies a conservative road-hazard presentation filter:

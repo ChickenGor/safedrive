@@ -129,11 +129,11 @@ def build_demo() -> gr.Blocks:
                 video_output = gr.Video(label="SafeDrive result")
             frame_stride = gr.Slider(
                 minimum=1,
-                maximum=6,
+                maximum=30,
                 value=4,
                 step=1,
-                label="Demo speed",
-                info="1 = analyse every frame (slowest); 4 = fast demo mode (recommended).",
+                label="Analysis interval (frames)",
+                info="1 = analyse every frame (most reliable); 3–6 = recommended fast demo; 30 = rough preview only.",
             )
             video_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
             video_voice = gr.Checkbox(label="Play fast warning beeps after analysis", value=True)

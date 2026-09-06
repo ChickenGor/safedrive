@@ -22,32 +22,6 @@ from src.main import build_pipeline, process_image, process_video  # noqa: E402
 
 WEB_OUTPUTS = PROJECT_ROOT / "outputs" / "web_app"
 _pipeline = None
-BEEP_WARNING_JS = """
-(warning, enabled) => {
-    if (!enabled || !warning) return [];
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return [];
-    const context = new AudioContext();
-    const start = context.currentTime + 0.03;
-    // Three short, fast beeps: an audible notification, not an emergency siren.
-    [0, 0.16, 0.32].forEach((offset) => {
-        const oscillator = context.createOscillator();
-        const gain = context.createGain();
-        oscillator.type = "square";
-        oscillator.frequency.value = 880;
-        gain.gain.setValueAtTime(0.0001, start + offset);
-        gain.gain.exponentialRampToValueAtTime(0.16, start + offset + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.11);
-        oscillator.connect(gain).connect(context.destination);
-        oscillator.start(start + offset);
-        oscillator.stop(start + offset + 0.12);
-    });
-    window.setTimeout(() => context.close(), 750);
-    return [];
-}
-"""
-
-
 def _get_pipeline():
     """Create model modules once, so browser requests reuse loaded checkpoints."""
     global _pipeline
@@ -112,14 +86,12 @@ def build_demo() -> gr.Blocks:
             image_button = gr.Button("Analyse image", variant="primary")
             image_status = gr.Textbox(label="Status", interactive=False)
             image_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
-            image_voice = gr.Checkbox(label="Play fast warning beeps after analysis", value=True)
             image_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
-            image_event = image_button.click(
+            image_button.click(
                 analyse_image,
                 inputs=[image_input, image_zone],
                 outputs=[image_output, image_status, image_warning],
             )
-            image_event.then(fn=None, inputs=[image_warning, image_voice], js=BEEP_WARNING_JS)
 
         with gr.Tab("Analyse video"):
             with gr.Row():
@@ -136,16 +108,14 @@ def build_demo() -> gr.Blocks:
                 info="1 = analyse every frame (most reliable); 3–6 = recommended fast demo; 30 = rough preview only.",
             )
             video_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
-            video_voice = gr.Checkbox(label="Play fast warning beeps after analysis", value=True)
             video_button = gr.Button("Analyse video", variant="primary")
             video_status = gr.Textbox(label="Status", interactive=False)
             video_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
-            video_event = video_button.click(
+            video_button.click(
                 analyse_video,
                 inputs=[video_input, frame_stride, video_zone],
                 outputs=[video_output, video_status, video_warning],
             )
-            video_event.then(fn=None, inputs=[video_warning, video_voice], js=BEEP_WARNING_JS)
 
         gr.Markdown(
             "For the live presentation, use a short video clip. Long videos process frame by frame "

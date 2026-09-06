@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 import sys
+import wave
 
 import cv2
 import numpy as np
@@ -35,25 +36,49 @@ from warning.warning_manager import WarningManager  # noqa: E402
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
-def _make_browser_playable_video(intermediate: Path, destination: Path) -> None:
+def _write_warning_audio(destination: Path, duration_seconds: float, alert_times: list[float]) -> None:
+    """Create a silent track with three quick tones at each confirmed warning."""
+    sample_rate = 44_100
+    samples = np.zeros(max(1, int(np.ceil(duration_seconds * sample_rate))), dtype=np.int16)
+    tone_length = int(0.11 * sample_rate)
+    tone = (np.sin(2 * np.pi * 880 * np.arange(tone_length) / sample_rate) * 9_000).astype(np.int16)
+    for alert_time in alert_times:
+        for offset in (0.0, 0.16, 0.32):
+            start = int((alert_time + offset) * sample_rate)
+            end = min(start + tone_length, len(samples))
+            if start < len(samples):
+                samples[start:end] = np.maximum(samples[start:end], tone[: end - start])
+    with wave.open(str(destination), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(samples.tobytes())
+
+
+def _make_browser_playable_video(
+    intermediate: Path, destination: Path, duration_seconds: float, alert_times: list[float]
+) -> None:
     """Encode OpenCV's temporary MP4 as H.264 for Chrome/Gradio playback.
 
     OpenCV commonly writes ``mp4v`` on Windows. It is readable by OpenCV but is
     not reliably supported by browsers, so the web demo would show
     "Video not playable". The bundled FFmpeg supplied by imageio-ffmpeg writes
-    a standards-compatible H.264/yuv420p MP4. Original audio is intentionally
-    omitted because this prototype supplies its own optional warning voice.
+    a standards-compatible H.264/yuv420p MP4. Original audio is deliberately
+    omitted; the output contains only generated beep alerts for confirmed warnings.
     """
+    warning_audio = intermediate.with_suffix(".warning.wav")
+    _write_warning_audio(warning_audio, duration_seconds, alert_times)
     command = [
-        get_ffmpeg_exe(), "-y", "-i", str(intermediate),
-        "-map", "0:v:0", "-an", "-c:v", "libx264", "-preset", "veryfast",
-        "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+        get_ffmpeg_exe(), "-y", "-i", str(intermediate), "-i", str(warning_audio),
+        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "veryfast",
+        "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-shortest", "-movflags", "+faststart",
         str(destination),
     ]
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
         details = completed.stderr.strip().splitlines()[-1] if completed.stderr else "unknown FFmpeg error"
         raise RuntimeError(f"Could not create browser-playable MP4: {details}")
+    warning_audio.unlink(missing_ok=True)
 
 
 @dataclass
@@ -296,6 +321,9 @@ def process_video(
     frame_number = 0
     latest_output = None
     highest_warning = None
+    alert_times: list[float] = []
+    last_alert_frame = -1_000_000
+    last_alert_message = ""
     try:
         while True:
             ok, frame = capture.read()
@@ -310,12 +338,22 @@ def process_video(
                 )
                 if warning is not None and (highest_warning is None or warning.priority < highest_warning.priority):
                     highest_warning = warning
+                # Keep beeps meaningful: play when a warning begins/changes, or
+                # at most once every two seconds for a continuing warning.
+                if warning is not None and (
+                    warning.message != last_alert_message or frame_number - last_alert_frame >= int(2 * fps)
+                ):
+                    alert_times.append(frame_number / fps)
+                    last_alert_frame = frame_number
+                    last_alert_message = warning.message
+                elif warning is None:
+                    last_alert_message = ""
             writer.write(latest_output)
             frame_number += 1
     finally:
         capture.release()
         writer.release()
-    _make_browser_playable_video(intermediate, destination)
+    _make_browser_playable_video(intermediate, destination, frame_number / fps, alert_times)
     intermediate.unlink(missing_ok=True)
     return highest_warning.message if highest_warning is not None else ""
 

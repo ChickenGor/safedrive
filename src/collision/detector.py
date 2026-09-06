@@ -15,7 +15,9 @@ SUPPORTED_OBJECTS = {"vehicle", "person"}
 # likely lane. The previous broad zone included roadside scenery in narrow-road
 # dashcam footage, making the demo overlay misleading.
 # Points are ordered top-left, top-right, bottom-right, bottom-left.
-FORWARD_REGION = ((0.40, 0.48), (0.60, 0.48), (0.84, 1.00), (0.16, 1.00))
+# The near-road corridor begins below the horizon/vanishing area.  It is a
+# qualitative visual/risk heuristic, deliberately not a lane detector.
+FORWARD_REGION = ((0.43, 0.58), (0.57, 0.58), (0.80, 0.98), (0.20, 0.98))
 
 
 @dataclass(frozen=True)

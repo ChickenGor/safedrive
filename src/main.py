@@ -301,9 +301,9 @@ def process_video(
     """Process a video, optionally reusing analysis between frames for a fast demo.
 
     ``frame_stride=1`` is the accurate default: both detectors run on every frame.
-    Higher values are intended only for an interactive presentation, where the
-    previously annotated frame is repeated between inference frames to shorten
-    processing time while retaining the original video frame rate.
+    Higher values are intended only for an interactive presentation. The video
+    remains visually smooth because original skipped frames are retained, but
+    their boxes/warning state are reused until the next analysis frame.
     """
     if frame_stride < 1:
         raise ValueError("frame_stride must be at least 1")
@@ -319,12 +319,14 @@ def process_video(
         raise RuntimeError(f"Could not open output video writer: {intermediate}")
     # A video is a fresh scene; do not carry collision tracks from a prior image
     # or an earlier browser upload into its temporal risk assessment.
-    collision_detector = pipeline[1]
+    road_hazard_detector, collision_detector, warning_manager = pipeline
     if hasattr(collision_detector, "reset"):
         collision_detector.reset()
     hazard_filter = VideoHazardFilter()
     frame_number = 0
-    latest_output = None
+    latest_hazards = []
+    latest_collision_risks = []
+    latest_warning = None
     highest_warning = None
     alerts: list[tuple[float, str]] = []
     last_alert_frame = -1_000_000
@@ -334,13 +336,14 @@ def process_video(
             ok, frame = capture.read()
             if not ok:
                 break
-            if frame_number % frame_stride == 0 or latest_output is None:
-                latest_output, warning = process_frame_with_warning(
-                    frame,
-                    *pipeline,
-                    hazard_filter=hazard_filter,
-                    show_forward_zone=show_forward_zone,
-                )
+            if frame_number % frame_stride == 0:
+                hazards = road_hazard_detector.detect(frame)
+                hazards = hazard_filter.filter(hazards)
+                collision_risks = collision_detector.detect(frame)
+                warning = warning_manager.evaluate(hazards, collision_risks)
+                latest_hazards = hazards
+                latest_collision_risks = collision_risks
+                latest_warning = warning
                 if warning is not None and (highest_warning is None or warning.priority < highest_warning.priority):
                     highest_warning = warning
                 # Keep beeps meaningful: play when a warning begins/changes, or
@@ -354,7 +357,14 @@ def process_video(
                     last_alert_message = warning.message
                 elif warning is None:
                     last_alert_message = ""
-            writer.write(latest_output)
+            # Preserve every original video frame. In fast mode, the overlay is
+            # simply held between detector updates instead of freezing the scene.
+            writer.write(
+                annotate_frame(
+                    frame.copy(), latest_hazards, latest_collision_risks,
+                    latest_warning, show_forward_zone,
+                )
+            )
             frame_number += 1
     finally:
         capture.release()

@@ -193,18 +193,20 @@ def build_demo() -> gr.Blocks:
                 gr.Markdown("### Manually adjust forward-risk zone\nAdvanced mode accepts any four in-frame corners. Keep them ordered clockwise so the zone does not cross itself.")
                 with gr.Row():
                     with gr.Column(scale=1):
+                        gr.Markdown("**Top edge**")
                         with gr.Row():
                             zone_top_left_x = gr.Slider(0.0, 1.0, value=0.43, step=0.01, label="Top-left X")
-                            zone_top_left_y = gr.Slider(0.0, 1.0, value=0.58, step=0.01, label="Top-left Y")
-                        with gr.Row():
                             zone_top_right_x = gr.Slider(0.0, 1.0, value=0.57, step=0.01, label="Top-right X")
-                            zone_top_right_y = gr.Slider(0.0, 1.0, value=0.58, step=0.01, label="Top-right Y")
                         with gr.Row():
-                            zone_bottom_right_x = gr.Slider(0.0, 1.0, value=0.80, step=0.01, label="Bottom-right X")
-                            zone_bottom_right_y = gr.Slider(0.0, 1.0, value=0.98, step=0.01, label="Bottom-right Y")
+                            zone_top_left_y = gr.Slider(0.0, 1.0, value=0.58, step=0.01, label="Top-left Y")
+                            zone_top_right_y = gr.Slider(0.0, 1.0, value=0.58, step=0.01, label="Top-right Y")
+                        gr.Markdown("**Bottom edge**")
                         with gr.Row():
                             zone_bottom_left_x = gr.Slider(0.0, 1.0, value=0.20, step=0.01, label="Bottom-left X")
+                            zone_bottom_right_x = gr.Slider(0.0, 1.0, value=0.80, step=0.01, label="Bottom-right X")
+                        with gr.Row():
                             zone_bottom_left_y = gr.Slider(0.0, 1.0, value=0.98, step=0.01, label="Bottom-left Y")
+                            zone_bottom_right_y = gr.Slider(0.0, 1.0, value=0.98, step=0.01, label="Bottom-right Y")
                     with gr.Column(scale=1):
                         zone_preview = gr.Image(label="Live zone preview (first video frame)", type="numpy", interactive=False)
             video_button = gr.Button(

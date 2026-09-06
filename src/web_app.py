@@ -198,8 +198,14 @@ def build_demo() -> gr.Blocks:
                         info="1 = analyse every frame (most reliable); 3–6 = recommended fast demo; 30 = rough preview only.",
                     )
                     video_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
-                    with gr.Accordion("Manually adjust forward-risk zone for this video", open=False):
-                        gr.Markdown("Adjust the preview first, then analyse. This calibration changes the forward-risk rule for this upload; it is not automatic lane detection.")
+                with gr.Column(scale=1):
+                    video_output = gr.Video(label="SafeDrive result")
+                    video_status = gr.Textbox(label="Status", interactive=False)
+                    video_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
+            with gr.Accordion("Manually adjust forward-risk zone for this video", open=False):
+                gr.Markdown("Adjust the preview first, then analyse. This calibration changes the forward-risk rule for this upload; it is not automatic lane detection.")
+                with gr.Row():
+                    with gr.Column(scale=1):
                         zone_mode = gr.Radio(
                             ["Symmetric guide", "Advanced four-corner"],
                             value="Symmetric guide", label="Calibration mode",
@@ -219,12 +225,9 @@ def build_demo() -> gr.Blocks:
                         with gr.Row():
                             zone_bottom_left_x = gr.Slider(0.0, 0.50, value=0.20, step=0.01, label="Bottom-left X")
                             zone_bottom_left_y = gr.Slider(0.60, 1.0, value=0.98, step=0.01, label="Bottom-left Y")
+                    with gr.Column(scale=1):
                         zone_preview = gr.Image(label="Live zone preview (first video frame)", type="numpy", interactive=False)
-                    video_button = gr.Button("Analyse video", variant="primary")
-                with gr.Column(scale=1):
-                    video_output = gr.Video(label="SafeDrive result")
-                    video_status = gr.Textbox(label="Status", interactive=False)
-                    video_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
+            video_button = gr.Button("Analyse video", variant="primary")
             video_button.click(
                 analyse_video,
                 inputs=[

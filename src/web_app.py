@@ -50,13 +50,14 @@ def analyse_image(upload: str | None) -> tuple[str, str]:
     return str(destination), "Analysis complete. Review the warning shown in the image."
 
 
-def analyse_video(upload: str | None) -> tuple[str, str]:
+def analyse_video(upload: str | None, frame_stride: int) -> tuple[str, str]:
     """Run the existing sequential video pipeline and return its annotated video."""
     source = _require_upload(upload, "dashcam video")
     WEB_OUTPUTS.mkdir(parents=True, exist_ok=True)
     destination = WEB_OUTPUTS / f"video_{uuid4().hex}.mp4"
-    process_video(source, destination, _get_pipeline())
-    return str(destination), "Analysis complete. Video processing can take several minutes on long clips."
+    process_video(source, destination, _get_pipeline(), frame_stride=int(frame_stride))
+    mode = "standard" if int(frame_stride) == 1 else f"fast demo (every {int(frame_stride)}th frame analysed)"
+    return str(destination), f"Analysis complete using {mode} mode."
 
 
 def build_demo() -> gr.Blocks:
@@ -85,9 +86,21 @@ def build_demo() -> gr.Blocks:
             with gr.Row():
                 video_input = gr.Video(label="Dashcam video", format="mp4")
                 video_output = gr.Video(label="SafeDrive result", format="mp4")
+            frame_stride = gr.Slider(
+                minimum=1,
+                maximum=6,
+                value=4,
+                step=1,
+                label="Demo speed",
+                info="1 = analyse every frame (slowest); 4 = fast demo mode (recommended).",
+            )
             video_button = gr.Button("Analyse video", variant="primary")
             video_status = gr.Textbox(label="Status", interactive=False)
-            video_button.click(analyse_video, inputs=video_input, outputs=[video_output, video_status])
+            video_button.click(
+                analyse_video,
+                inputs=[video_input, frame_stride],
+                outputs=[video_output, video_status],
+            )
 
         gr.Markdown(
             "For the live presentation, use a short video clip. Long videos process frame by frame "

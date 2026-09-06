@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 import cv2
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = Path(__file__).resolve().parent
@@ -25,7 +26,7 @@ from configs.config import (  # noqa: E402
     ROAD_HAZARD_VIDEO_CONFIRMATION_FRAMES,
     ROAD_HAZARD_WEIGHTS,
 )
-from collision.detector import CollisionDetector  # noqa: E402
+from collision.detector import CollisionDetector, CollisionRisk, FORWARD_REGION  # noqa: E402
 from road_hazard.detector import HazardDetection, RoadHazardDetector  # noqa: E402
 from warning.warning_manager import WarningManager  # noqa: E402
 
@@ -129,8 +130,41 @@ class VideoHazardFilter:
         return confirmed
 
 
-def annotate_frame(frame, hazards, warning):
+def _draw_forward_region(frame) -> None:
+    """Draw the image-space corridor used by the collision-risk heuristic."""
+    height, width = frame.shape[:2]
+    points = [
+        (round(x * width), round(y * height))
+        for x, y in FORWARD_REGION
+    ]
+    cv2.polylines(frame, [np.array(points, dtype=np.int32)], True, (255, 255, 0), 2)
+    cv2.putText(
+        frame, "FORWARD RISK ZONE", points[0], cv2.FONT_HERSHEY_SIMPLEX,
+        0.5, (255, 255, 0), 2,
+    )
+
+
+def _draw_collision_risks(frame, collision_risks: list[CollisionRisk]) -> None:
+    """Show detections even at LOW risk; only MEDIUM/HIGH create warnings."""
+    colors = {"low": (0, 200, 0), "medium": (0, 165, 255), "high": (0, 0, 255)}
+    for index, risk in enumerate(collision_risks):
+        if risk.bbox is None:
+            continue
+        x1, y1, x2, y2 = risk.bbox
+        level = risk.risk_level.lower()
+        color = colors.get(level, (255, 255, 255))
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        label = f"{risk.object_type} {risk.confidence:.2f} | {level.upper()}"
+        label_y = max(y1 - 8 - (index % 3) * 18, 22)
+        (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
+        cv2.rectangle(frame, (x1, label_y - text_height - baseline - 3), (x1 + text_width + 4, label_y + 3), color, -1)
+        cv2.putText(frame, label, (x1 + 2, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
+
+
+def annotate_frame(frame, hazards, collision_risks, warning):
     """Draw module outputs without coupling detector internals to OpenCV."""
+    _draw_forward_region(frame)
+    _draw_collision_risks(frame, collision_risks)
     for hazard in hazards:
         x1, y1, x2, y2 = hazard.bbox
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 165, 255), 2)
@@ -162,7 +196,7 @@ def process_frame(frame, road_hazard_detector, collision_detector, warning_manag
         hazards = hazard_filter.filter(hazards)
     collision_risks = collision_detector.detect(frame)
     warning = warning_manager.evaluate(hazards, collision_risks)
-    return annotate_frame(frame.copy(), hazards, warning)
+    return annotate_frame(frame.copy(), hazards, collision_risks, warning)
 
 
 def process_image(source: Path, destination: Path, pipeline) -> None:
@@ -174,20 +208,39 @@ def process_image(source: Path, destination: Path, pipeline) -> None:
         raise RuntimeError(f"Could not write output image: {destination}")
 
 
-def process_video(source: Path, destination: Path, pipeline) -> None:
+def process_video(source: Path, destination: Path, pipeline, frame_stride: int = 1) -> None:
+    """Process a video, optionally reusing analysis between frames for a fast demo.
+
+    ``frame_stride=1`` is the accurate default: both detectors run on every frame.
+    Higher values are intended only for an interactive presentation, where the
+    previously annotated frame is repeated between inference frames to shorten
+    processing time while retaining the original video frame rate.
+    """
+    if frame_stride < 1:
+        raise ValueError("frame_stride must be at least 1")
     capture = cv2.VideoCapture(str(source))
     if not capture.isOpened():
         raise ValueError(f"Could not open video: {source}")
     width, height = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)), int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
     writer = cv2.VideoWriter(str(destination), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+    # A video is a fresh scene; do not carry collision tracks from a prior image
+    # or an earlier browser upload into its temporal risk assessment.
+    collision_detector = pipeline[1]
+    if hasattr(collision_detector, "reset"):
+        collision_detector.reset()
     hazard_filter = VideoHazardFilter()
+    frame_number = 0
+    latest_output = None
     try:
         while True:
             ok, frame = capture.read()
             if not ok:
                 break
-            writer.write(process_frame(frame, *pipeline, hazard_filter=hazard_filter))
+            if frame_number % frame_stride == 0 or latest_output is None:
+                latest_output = process_frame(frame, *pipeline, hazard_filter=hazard_filter)
+            writer.write(latest_output)
+            frame_number += 1
     finally:
         capture.release()
         writer.release()

@@ -70,14 +70,14 @@ class RoadHazardDetector:
                 f"{sorted(SUPPORTED_HAZARDS)}. Wrong checkpoint?"
             )
 
-    def detect(self, frame: Any) -> list[HazardDetection]:
+    def detect(self, frame: Any, confidence: float | None = None) -> list[HazardDetection]:
         """Return only the three hazard categories supported by this project."""
         if self.model is None:
             self.load()
 
         results = self.model.predict(
             frame,
-            conf=self.confidence,
+            conf=self.confidence if confidence is None else confidence,
             imgsz=self.imgsz,
             verbose=False,
         )

@@ -50,6 +50,7 @@ def _manual_forward_region(
     bottom_right_y: float,
     bottom_left_x: float,
     bottom_left_y: float,
+    sensitive_pothole_mode: bool,
 ) -> tuple[tuple[float, float], ...]:
     """Build the user-calibrated four-corner forward-risk polygon."""
     return (
@@ -97,6 +98,7 @@ def analyse_video(
             top_left_x, top_left_y, top_right_x, top_right_y,
             bottom_right_x, bottom_right_y, bottom_left_x, bottom_left_y,
         ),
+        sensitive_pothole_mode=sensitive_pothole_mode,
     )
     mode = "standard" if int(frame_stride) == 1 else f"fast demo (every {int(frame_stride)}th frame analysed)"
     return str(destination), f"Analysis complete using {mode} mode.", warning
@@ -180,6 +182,9 @@ def build_demo() -> gr.Blocks:
                         info="1 = analyse every frame (most reliable); 3–6 = recommended fast demo; 30 = rough preview only.",
                     )
                     video_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
+                    sensitive_pothole = gr.Checkbox(
+                        label="Sensitive pothole mode (higher false-alert risk)", value=False,
+                    )
                 with gr.Column(scale=1):
                     video_output = gr.Video(label="SafeDrive result")
                     video_status = gr.Textbox(label="Status", interactive=False)
@@ -212,6 +217,7 @@ def build_demo() -> gr.Blocks:
                     video_input, frame_stride, video_zone,
                     zone_top_left_x, zone_top_left_y, zone_top_right_x, zone_top_right_y,
                     zone_bottom_right_x, zone_bottom_right_y, zone_bottom_left_x, zone_bottom_left_y,
+                    sensitive_pothole,
                 ],
                 outputs=[video_output, video_status, video_warning],
             )

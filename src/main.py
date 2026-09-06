@@ -112,11 +112,13 @@ class VideoHazardFilter:
         min_centre_y_change: float = ROAD_HAZARD_MIN_CENTRE_Y_CHANGE,
         min_area_growth: float = ROAD_HAZARD_MIN_AREA_GROWTH,
         dashboard_exclusion_y: float = ROAD_HAZARD_DASHBOARD_EXCLUSION_Y,
+        sensitive_pothole_mode: bool = False,
     ) -> None:
         self.confirmation_frames = confirmation_frames
         self.min_centre_y_change = min_centre_y_change
         self.min_area_growth = min_area_growth
         self.dashboard_exclusion_y = dashboard_exclusion_y
+        self.sensitive_pothole_mode = sensitive_pothole_mode
         self.frame_number = 0
         self.tracks: list[_HazardTrack] = []
 
@@ -158,6 +160,15 @@ class VideoHazardFilter:
             # reflections rather than usable road surface.
             if detection.bbox_norm is not None and detection.bbox_norm[3] >= self.dashboard_exclusion_y:
                 continue
+
+            # Optional presentation/testing mode: a low-confidence pothole near
+            # the ego-lane centre may be visible for only a few frames. Keep the
+            # strict temporal filter as the default to avoid reflection alerts.
+            if self.sensitive_pothole_mode and detection.label == "pothole" and detection.bbox_norm is not None:
+                centre_x, centre_y = detection.centre_norm
+                if 0.35 <= centre_x <= 0.65 and 0.55 <= centre_y <= 0.90:
+                    confirmed.append(detection)
+                    continue
 
             candidates = [
                 track for track in self.tracks
@@ -302,6 +313,7 @@ def process_video(
     frame_stride: int = 1,
     show_forward_zone: bool = False,
     forward_region=None,
+    sensitive_pothole_mode: bool = False,
 ) -> str:
     """Process a video, optionally reusing analysis between frames for a fast demo.
 
@@ -330,7 +342,7 @@ def process_video(
         collision_detector.set_forward_region(active_forward_region)
     if hasattr(collision_detector, "reset"):
         collision_detector.reset()
-    hazard_filter = VideoHazardFilter()
+    hazard_filter = VideoHazardFilter(sensitive_pothole_mode=sensitive_pothole_mode)
     frame_number = 0
     latest_hazards = []
     latest_collision_risks = []
@@ -345,7 +357,7 @@ def process_video(
             if not ok:
                 break
             if frame_number % frame_stride == 0:
-                hazards = road_hazard_detector.detect(frame)
+                hazards = road_hazard_detector.detect(frame, confidence=0.25 if sensitive_pothole_mode else None)
                 hazards = hazard_filter.filter(hazards)
                 collision_risks = collision_detector.detect(frame)
                 warning = warning_manager.evaluate(hazards, collision_risks)

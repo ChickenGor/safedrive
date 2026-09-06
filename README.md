@@ -119,6 +119,11 @@ show forward perspective motion before displaying it. This reduces stationary
 windshield/dashboard-reflection false positives; it is not a replacement for more
 diverse training data.
 
+The video interface also offers an optional **Sensitive pothole mode** for
+testing difficult clips. It lowers only pothole confidence to 0.25 and permits a
+centred close pothole candidate without temporal confirmation. It may increase
+false alerts, so normal mode remains the recommended presentation default.
+
 ## Shared project assets
 
 Datasets, checkpoints, training results, and full demo videos are intentionally

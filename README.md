@@ -95,6 +95,11 @@ Wi-Fi, replace `127.0.0.1` with the laptop's local IPv4 address (for example,
 from sleeping during the demo. This is a local presentation interface, not a
 public hosted service.
 
+The forward-risk corridor is optional and off by default because it is a
+fixed, explainable heuristic rather than lane segmentation. Enable the browser
+checkbox or add `--show-forward-zone` to a CLI command only when explaining the
+collision-risk rule in a presentation.
+
 For video only, SafeDrive applies a conservative road-hazard presentation filter:
 it ignores the lower dashboard strip and requires a matched hazard to persist and
 show forward perspective motion before displaying it. This reduces stationary

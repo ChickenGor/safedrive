@@ -41,21 +41,27 @@ def _require_upload(upload: str | None, kind: str) -> Path:
     return source
 
 
-def analyse_image(upload: str | None) -> tuple[str, str]:
+def analyse_image(upload: str | None, show_forward_zone: bool) -> tuple[str, str]:
     """Run the existing image pipeline and return a browser-displayable result."""
     source = _require_upload(upload, "road image")
     WEB_OUTPUTS.mkdir(parents=True, exist_ok=True)
     destination = WEB_OUTPUTS / f"image_{uuid4().hex}.jpg"
-    process_image(source, destination, _get_pipeline())
+    process_image(source, destination, _get_pipeline(), show_forward_zone)
     return str(destination), "Analysis complete. Review the warning shown in the image."
 
 
-def analyse_video(upload: str | None, frame_stride: int) -> tuple[str, str]:
+def analyse_video(upload: str | None, frame_stride: int, show_forward_zone: bool) -> tuple[str, str]:
     """Run the existing sequential video pipeline and return its annotated video."""
     source = _require_upload(upload, "dashcam video")
     WEB_OUTPUTS.mkdir(parents=True, exist_ok=True)
     destination = WEB_OUTPUTS / f"video_{uuid4().hex}.mp4"
-    process_video(source, destination, _get_pipeline(), frame_stride=int(frame_stride))
+    process_video(
+        source,
+        destination,
+        _get_pipeline(),
+        frame_stride=int(frame_stride),
+        show_forward_zone=show_forward_zone,
+    )
     mode = "standard" if int(frame_stride) == 1 else f"fast demo (every {int(frame_stride)}th frame analysed)"
     return str(destination), f"Analysis complete using {mode} mode."
 
@@ -80,7 +86,12 @@ def build_demo() -> gr.Blocks:
                 image_output = gr.Image(label="SafeDrive result", type="filepath")
             image_button = gr.Button("Analyse image", variant="primary")
             image_status = gr.Textbox(label="Status", interactive=False)
-            image_button.click(analyse_image, inputs=image_input, outputs=[image_output, image_status])
+            image_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
+            image_button.click(
+                analyse_image,
+                inputs=[image_input, image_zone],
+                outputs=[image_output, image_status],
+            )
 
         with gr.Tab("Analyse video"):
             with gr.Row():
@@ -94,11 +105,12 @@ def build_demo() -> gr.Blocks:
                 label="Demo speed",
                 info="1 = analyse every frame (slowest); 4 = fast demo mode (recommended).",
             )
+            video_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
             video_button = gr.Button("Analyse video", variant="primary")
             video_status = gr.Textbox(label="Status", interactive=False)
             video_button.click(
                 analyse_video,
-                inputs=[video_input, frame_stride],
+                inputs=[video_input, frame_stride, video_zone],
                 outputs=[video_output, video_status],
             )
 

@@ -161,9 +161,10 @@ def _draw_collision_risks(frame, collision_risks: list[CollisionRisk]) -> None:
         cv2.putText(frame, label, (x1 + 2, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
 
 
-def annotate_frame(frame, hazards, collision_risks, warning):
+def annotate_frame(frame, hazards, collision_risks, warning, show_forward_zone: bool = False):
     """Draw module outputs without coupling detector internals to OpenCV."""
-    _draw_forward_region(frame)
+    if show_forward_zone:
+        _draw_forward_region(frame)
     _draw_collision_risks(frame, collision_risks)
     for hazard in hazards:
         x1, y1, x2, y2 = hazard.bbox
@@ -190,25 +191,38 @@ def build_pipeline():
     )
 
 
-def process_frame(frame, road_hazard_detector, collision_detector, warning_manager, hazard_filter=None):
+def process_frame(
+    frame,
+    road_hazard_detector,
+    collision_detector,
+    warning_manager,
+    hazard_filter=None,
+    show_forward_zone: bool = False,
+):
     hazards = road_hazard_detector.detect(frame)
     if hazard_filter is not None:
         hazards = hazard_filter.filter(hazards)
     collision_risks = collision_detector.detect(frame)
     warning = warning_manager.evaluate(hazards, collision_risks)
-    return annotate_frame(frame.copy(), hazards, collision_risks, warning)
+    return annotate_frame(frame.copy(), hazards, collision_risks, warning, show_forward_zone)
 
 
-def process_image(source: Path, destination: Path, pipeline) -> None:
+def process_image(source: Path, destination: Path, pipeline, show_forward_zone: bool = False) -> None:
     frame = cv2.imread(str(source))
     if frame is None:
         raise ValueError(f"Could not read image: {source}")
-    output = process_frame(frame, *pipeline)
+    output = process_frame(frame, *pipeline, show_forward_zone=show_forward_zone)
     if not cv2.imwrite(str(destination), output):
         raise RuntimeError(f"Could not write output image: {destination}")
 
 
-def process_video(source: Path, destination: Path, pipeline, frame_stride: int = 1) -> None:
+def process_video(
+    source: Path,
+    destination: Path,
+    pipeline,
+    frame_stride: int = 1,
+    show_forward_zone: bool = False,
+) -> None:
     """Process a video, optionally reusing analysis between frames for a fast demo.
 
     ``frame_stride=1`` is the accurate default: both detectors run on every frame.
@@ -238,7 +252,12 @@ def process_video(source: Path, destination: Path, pipeline, frame_stride: int =
             if not ok:
                 break
             if frame_number % frame_stride == 0 or latest_output is None:
-                latest_output = process_frame(frame, *pipeline, hazard_filter=hazard_filter)
+                latest_output = process_frame(
+                    frame,
+                    *pipeline,
+                    hazard_filter=hazard_filter,
+                    show_forward_zone=show_forward_zone,
+                )
             writer.write(latest_output)
             frame_number += 1
     finally:
@@ -250,6 +269,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run SafeDrive on one image or video.")
     parser.add_argument("source", type=Path, help="Path to an input image or video")
     parser.add_argument("--output", type=Path, help="Optional output file path")
+    parser.add_argument("--show-forward-zone", action="store_true", help="Draw the collision-risk corridor for explanation/demo")
     args = parser.parse_args()
 
     if not args.source.is_file():
@@ -261,9 +281,9 @@ def main() -> None:
 
     pipeline = build_pipeline()
     if is_image:
-        process_image(args.source, destination, pipeline)
+        process_image(args.source, destination, pipeline, args.show_forward_zone)
     else:
-        process_video(args.source, destination, pipeline)
+        process_video(args.source, destination, pipeline, show_forward_zone=args.show_forward_zone)
     print(f"Saved SafeDrive output to: {destination}")
 
 

@@ -22,6 +22,17 @@ from src.main import build_pipeline, process_image, process_video  # noqa: E402
 
 WEB_OUTPUTS = PROJECT_ROOT / "outputs" / "web_app"
 _pipeline = None
+SPEAK_WARNING_JS = """
+(warning, enabled) => {
+    if (!enabled || !warning || !("speechSynthesis" in window)) return [];
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(warning);
+    utterance.rate = 0.92;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+    return [];
+}
+"""
 
 
 def _get_pipeline():
@@ -41,21 +52,22 @@ def _require_upload(upload: str | None, kind: str) -> Path:
     return source
 
 
-def analyse_image(upload: str | None, show_forward_zone: bool) -> tuple[str, str]:
+def analyse_image(upload: str | None, show_forward_zone: bool) -> tuple[str, str, str]:
     """Run the existing image pipeline and return a browser-displayable result."""
     source = _require_upload(upload, "road image")
     WEB_OUTPUTS.mkdir(parents=True, exist_ok=True)
     destination = WEB_OUTPUTS / f"image_{uuid4().hex}.jpg"
-    process_image(source, destination, _get_pipeline(), show_forward_zone)
-    return str(destination), "Analysis complete. Review the warning shown in the image."
+    warning = process_image(source, destination, _get_pipeline(), show_forward_zone)
+    status = "Analysis complete. Review the warning shown in the image."
+    return str(destination), status, warning
 
 
-def analyse_video(upload: str | None, frame_stride: int, show_forward_zone: bool) -> tuple[str, str]:
+def analyse_video(upload: str | None, frame_stride: int, show_forward_zone: bool) -> tuple[str, str, str]:
     """Run the existing sequential video pipeline and return its annotated video."""
     source = _require_upload(upload, "dashcam video")
     WEB_OUTPUTS.mkdir(parents=True, exist_ok=True)
     destination = WEB_OUTPUTS / f"video_{uuid4().hex}.mp4"
-    process_video(
+    warning = process_video(
         source,
         destination,
         _get_pipeline(),
@@ -63,7 +75,7 @@ def analyse_video(upload: str | None, frame_stride: int, show_forward_zone: bool
         show_forward_zone=show_forward_zone,
     )
     mode = "standard" if int(frame_stride) == 1 else f"fast demo (every {int(frame_stride)}th frame analysed)"
-    return str(destination), f"Analysis complete using {mode} mode."
+    return str(destination), f"Analysis complete using {mode} mode.", warning
 
 
 def build_demo() -> gr.Blocks:
@@ -87,11 +99,14 @@ def build_demo() -> gr.Blocks:
             image_button = gr.Button("Analyse image", variant="primary")
             image_status = gr.Textbox(label="Status", interactive=False)
             image_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
-            image_button.click(
+            image_voice = gr.Checkbox(label="Speak confirmed warning after analysis", value=True)
+            image_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
+            image_event = image_button.click(
                 analyse_image,
                 inputs=[image_input, image_zone],
-                outputs=[image_output, image_status],
+                outputs=[image_output, image_status, image_warning],
             )
+            image_event.then(fn=None, inputs=[image_warning, image_voice], js=SPEAK_WARNING_JS)
 
         with gr.Tab("Analyse video"):
             with gr.Row():
@@ -106,13 +121,16 @@ def build_demo() -> gr.Blocks:
                 info="1 = analyse every frame (slowest); 4 = fast demo mode (recommended).",
             )
             video_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
+            video_voice = gr.Checkbox(label="Speak highest confirmed warning after analysis", value=True)
             video_button = gr.Button("Analyse video", variant="primary")
             video_status = gr.Textbox(label="Status", interactive=False)
-            video_button.click(
+            video_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
+            video_event = video_button.click(
                 analyse_video,
                 inputs=[video_input, frame_stride, video_zone],
-                outputs=[video_output, video_status],
+                outputs=[video_output, video_status, video_warning],
             )
+            video_event.then(fn=None, inputs=[video_warning, video_voice], js=SPEAK_WARNING_JS)
 
         gr.Markdown(
             "For the live presentation, use a short video clip. Long videos process frame by frame "

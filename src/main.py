@@ -191,6 +191,23 @@ def build_pipeline():
     )
 
 
+def process_frame_with_warning(
+    frame,
+    road_hazard_detector,
+    collision_detector,
+    warning_manager,
+    hazard_filter=None,
+    show_forward_zone: bool = False,
+):
+    """Run all modules for one frame and retain the selected warning for callers."""
+    hazards = road_hazard_detector.detect(frame)
+    if hazard_filter is not None:
+        hazards = hazard_filter.filter(hazards)
+    collision_risks = collision_detector.detect(frame)
+    warning = warning_manager.evaluate(hazards, collision_risks)
+    return annotate_frame(frame.copy(), hazards, collision_risks, warning, show_forward_zone), warning
+
+
 def process_frame(
     frame,
     road_hazard_detector,
@@ -199,21 +216,26 @@ def process_frame(
     hazard_filter=None,
     show_forward_zone: bool = False,
 ):
-    hazards = road_hazard_detector.detect(frame)
-    if hazard_filter is not None:
-        hazards = hazard_filter.filter(hazards)
-    collision_risks = collision_detector.detect(frame)
-    warning = warning_manager.evaluate(hazards, collision_risks)
-    return annotate_frame(frame.copy(), hazards, collision_risks, warning, show_forward_zone)
+    """Run all modules for one frame and return its annotated image."""
+    annotated, _ = process_frame_with_warning(
+        frame,
+        road_hazard_detector,
+        collision_detector,
+        warning_manager,
+        hazard_filter=hazard_filter,
+        show_forward_zone=show_forward_zone,
+    )
+    return annotated
 
 
-def process_image(source: Path, destination: Path, pipeline, show_forward_zone: bool = False) -> None:
+def process_image(source: Path, destination: Path, pipeline, show_forward_zone: bool = False) -> str:
     frame = cv2.imread(str(source))
     if frame is None:
         raise ValueError(f"Could not read image: {source}")
-    output = process_frame(frame, *pipeline, show_forward_zone=show_forward_zone)
+    output, warning = process_frame_with_warning(frame, *pipeline, show_forward_zone=show_forward_zone)
     if not cv2.imwrite(str(destination), output):
         raise RuntimeError(f"Could not write output image: {destination}")
+    return warning.message if warning is not None else ""
 
 
 def process_video(
@@ -222,7 +244,7 @@ def process_video(
     pipeline,
     frame_stride: int = 1,
     show_forward_zone: bool = False,
-) -> None:
+) -> str:
     """Process a video, optionally reusing analysis between frames for a fast demo.
 
     ``frame_stride=1`` is the accurate default: both detectors run on every frame.
@@ -246,23 +268,27 @@ def process_video(
     hazard_filter = VideoHazardFilter()
     frame_number = 0
     latest_output = None
+    highest_warning = None
     try:
         while True:
             ok, frame = capture.read()
             if not ok:
                 break
             if frame_number % frame_stride == 0 or latest_output is None:
-                latest_output = process_frame(
+                latest_output, warning = process_frame_with_warning(
                     frame,
                     *pipeline,
                     hazard_filter=hazard_filter,
                     show_forward_zone=show_forward_zone,
                 )
+                if warning is not None and (highest_warning is None or warning.priority < highest_warning.priority):
+                    highest_warning = warning
             writer.write(latest_output)
             frame_number += 1
     finally:
         capture.release()
         writer.release()
+    return highest_warning.message if highest_warning is not None else ""
 
 
 def main() -> None:

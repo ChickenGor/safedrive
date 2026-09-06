@@ -95,6 +95,8 @@ class CollisionDetector:
         """Set a manually calibrated image-relative forward corridor."""
         if len(forward_region) != 4:
             raise ValueError("forward_region must contain four trapezoid points")
+        if any(not (0.0 <= coordinate <= 1.0) for point in forward_region for coordinate in point):
+            raise ValueError("forward_region coordinates must be normalized between 0 and 1")
         self.forward_region = forward_region
 
     def detect(self, frame: Any) -> list[CollisionRisk]:
@@ -214,13 +216,20 @@ class CollisionDetector:
     def _inside_forward_region(
         x: float, y: float, forward_region: tuple[tuple[float, float], ...] = FORWARD_REGION
     ) -> bool:
-        (top_left_x, top_y), (top_right_x, _), (bottom_right_x, bottom_y), (bottom_left_x, _) = forward_region
-        if y < top_y or y > bottom_y:
-            return False
-        progress = (y - top_y) / (bottom_y - top_y)
-        left = top_left_x + (bottom_left_x - top_left_x) * progress
-        right = top_right_x + (bottom_right_x - top_right_x) * progress
-        return left <= x <= right
+        """Return whether a point is inside the chosen four-corner polygon.
+
+        This supports a manually calibrated, non-symmetric road corridor rather
+        than assuming its left and right edges share the same height.
+        """
+        inside = False
+        for index, (start_x, start_y) in enumerate(forward_region):
+            end_x, end_y = forward_region[index - 1]
+            crosses_scanline = (start_y > y) != (end_y > y)
+            if crosses_scanline:
+                intersection_x = (end_x - start_x) * (y - start_y) / (end_y - start_y) + start_x
+                if x < intersection_x:
+                    inside = not inside
+        return inside
 
     @staticmethod
     def _clip_box(

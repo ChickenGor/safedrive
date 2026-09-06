@@ -203,7 +203,7 @@ def build_demo() -> gr.Blocks:
                     video_status = gr.Textbox(label="Status", interactive=False)
                     video_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
             with gr.Accordion("Manually adjust forward-risk zone for this video", open=False):
-                gr.Markdown("Adjust the preview first, then analyse. This calibration changes the forward-risk rule for this upload; it is not automatic lane detection.")
+                gr.Markdown("Adjust the preview first, then analyse. Advanced mode accepts any four in-frame corners; keep them ordered clockwise so the zone does not cross itself.")
                 with gr.Row():
                     with gr.Column(scale=1):
                         zone_mode = gr.Radio(
@@ -214,17 +214,17 @@ def build_demo() -> gr.Blocks:
                         zone_top_width = gr.Slider(0.05, 0.30, value=0.07, step=0.01, label="Top half-width")
                         zone_bottom_width = gr.Slider(0.20, 0.48, value=0.30, step=0.01, label="Bottom half-width")
                         with gr.Row():
-                            zone_top_left_x = gr.Slider(0.0, 0.50, value=0.43, step=0.01, label="Top-left X")
-                            zone_top_left_y = gr.Slider(0.20, 0.85, value=0.58, step=0.01, label="Top-left Y")
+                            zone_top_left_x = gr.Slider(0.0, 1.0, value=0.43, step=0.01, label="Top-left X")
+                            zone_top_left_y = gr.Slider(0.0, 1.0, value=0.58, step=0.01, label="Top-left Y")
                         with gr.Row():
-                            zone_top_right_x = gr.Slider(0.50, 1.0, value=0.57, step=0.01, label="Top-right X")
-                            zone_top_right_y = gr.Slider(0.20, 0.85, value=0.58, step=0.01, label="Top-right Y")
+                            zone_top_right_x = gr.Slider(0.0, 1.0, value=0.57, step=0.01, label="Top-right X")
+                            zone_top_right_y = gr.Slider(0.0, 1.0, value=0.58, step=0.01, label="Top-right Y")
                         with gr.Row():
-                            zone_bottom_right_x = gr.Slider(0.50, 1.0, value=0.80, step=0.01, label="Bottom-right X")
-                            zone_bottom_right_y = gr.Slider(0.60, 1.0, value=0.98, step=0.01, label="Bottom-right Y")
+                            zone_bottom_right_x = gr.Slider(0.0, 1.0, value=0.80, step=0.01, label="Bottom-right X")
+                            zone_bottom_right_y = gr.Slider(0.0, 1.0, value=0.98, step=0.01, label="Bottom-right Y")
                         with gr.Row():
-                            zone_bottom_left_x = gr.Slider(0.0, 0.50, value=0.20, step=0.01, label="Bottom-left X")
-                            zone_bottom_left_y = gr.Slider(0.60, 1.0, value=0.98, step=0.01, label="Bottom-left Y")
+                            zone_bottom_left_x = gr.Slider(0.0, 1.0, value=0.20, step=0.01, label="Bottom-left X")
+                            zone_bottom_left_y = gr.Slider(0.0, 1.0, value=0.98, step=0.01, label="Bottom-left Y")
                     with gr.Column(scale=1):
                         zone_preview = gr.Image(label="Live zone preview (first video frame)", type="numpy", interactive=False)
             video_button = gr.Button("Analyse video", variant="primary")

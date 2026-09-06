@@ -11,9 +11,11 @@ from ultralytics import YOLO
 
 SUPPORTED_OBJECTS = {"vehicle", "person"}
 
-# Image-relative trapezoid: narrower near the horizon and wider near the car.
+# Image-relative trapezoid: begin below the horizon and follow the ego vehicle's
+# likely lane. The previous broad zone included roadside scenery in narrow-road
+# dashcam footage, making the demo overlay misleading.
 # Points are ordered top-left, top-right, bottom-right, bottom-left.
-FORWARD_REGION = ((0.35, 0.35), (0.65, 0.35), (0.90, 1.00), (0.10, 1.00))
+FORWARD_REGION = ((0.40, 0.48), (0.60, 0.48), (0.84, 1.00), (0.16, 1.00))
 
 
 @dataclass(frozen=True)
@@ -201,11 +203,12 @@ class CollisionDetector:
 
     @staticmethod
     def _inside_forward_region(x: float, y: float) -> bool:
-        if y < FORWARD_REGION[0][1] or y > 1.0:
+        (top_left_x, top_y), (top_right_x, _), (bottom_right_x, bottom_y), (bottom_left_x, _) = FORWARD_REGION
+        if y < top_y or y > bottom_y:
             return False
-        progress = (y - FORWARD_REGION[0][1]) / (1.0 - FORWARD_REGION[0][1])
-        left = 0.35 + (0.10 - 0.35) * progress
-        right = 0.65 + (0.90 - 0.65) * progress
+        progress = (y - top_y) / (bottom_y - top_y)
+        left = top_left_x + (bottom_left_x - top_left_x) * progress
+        right = top_right_x + (bottom_right_x - top_right_x) * progress
         return left <= x <= right
 
     @staticmethod

@@ -366,10 +366,9 @@ def process_video(
                 latest_warning = warning
                 if warning is not None and (highest_warning is None or warning.priority < highest_warning.priority):
                     highest_warning = warning
-                # Keep beeps meaningful: a red collision risk may repeat after
-                # two seconds, but a yellow warning beeps only when it begins or
-                # changes category (for example, from crack to pothole).
-                if warning is not None and (
+                # Audio is reserved for collision risk so road-hazard alerts do
+                # not become distracting during a drive. Hazards stay visual.
+                if warning is not None and warning.category == "collision" and (
                     warning.message != last_alert_message
                     or (warning.priority == 1 and frame_number - last_alert_frame >= int(2 * fps))
                 ):

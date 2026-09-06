@@ -106,12 +106,11 @@ top height, top width, and bottom width; the chosen shape affects both the
 visible overlay and the qualitative forward-risk rule for that upload. It is a
 manual presentation aid, not automatic road/lane segmentation.
 
-Exported videos remove the original dashcam audio. Each confirmed warning adds
-three embedded beeps at the relevant point: fast for a red HIGH forward-collision
-warning, slower for yellow MEDIUM/road-hazard warnings, and none for green LOW
-detections. Red warnings may repeat after two seconds; a yellow warning beeps
-only when it begins or changes type. This is a prototype notification, not a
-real-time safety system.
+Exported videos remove the original dashcam audio. Audio is reserved for
+confirmed forward-collision warnings: fast for red HIGH and slower for yellow
+MEDIUM. Road hazards (pothole, crack, and manhole) and green LOW detections are
+visual-only. Red warnings may repeat after two seconds. This is a prototype
+notification, not a real-time safety system.
 
 For video only, SafeDrive applies a conservative road-hazard presentation filter:
 it ignores the lower dashboard strip and requires a matched hazard to persist and

@@ -79,6 +79,22 @@ python -m src.main "path\to\road.jpg" --output "outputs\annotated.jpg"
 python -m src.main "path\to\dashcam.mp4" --output "outputs\annotated.mp4"
 ```
 
+## Local ADAS browser demo
+
+SafeDrive also includes a phone-friendly local browser interface. The laptop runs
+the models; a phone on the same Wi-Fi can upload an image or short video for
+analysis.
+
+```powershell
+python -m src.web_app --host 0.0.0.0 --port 7860
+```
+
+Open `http://127.0.0.1:7860` on the laptop. On a phone connected to the same
+Wi-Fi, replace `127.0.0.1` with the laptop's local IPv4 address (for example,
+`http://192.168.0.4:7860`). Keep the terminal running and prevent the laptop
+from sleeping during the demo. This is a local presentation interface, not a
+public hosted service.
+
 For video only, SafeDrive applies a conservative road-hazard presentation filter:
 it ignores the lower dashboard strip and requires a matched hazard to persist and
 show forward perspective motion before displaying it. This reduces stationary

@@ -56,6 +56,7 @@ class CollisionDetector:
         image_size: int = 512,
         iou_match_threshold: float = 0.30,
         max_missed_frames: int = 4,
+        forward_region: tuple[tuple[float, float], ...] = FORWARD_REGION,
     ) -> None:
         if not 0.0 <= confidence <= 1.0:
             raise ValueError("confidence must be between 0 and 1")
@@ -70,6 +71,7 @@ class CollisionDetector:
         self.image_size = image_size
         self.iou_match_threshold = iou_match_threshold
         self.max_missed_frames = max_missed_frames
+        self.forward_region = forward_region
         self.model: YOLO | None = None
         self._tracks: dict[int, _Track] = {}
         self._next_track_id = 0
@@ -88,6 +90,12 @@ class CollisionDetector:
         """Discard temporal state before processing an unrelated video."""
         self._tracks.clear()
         self._next_track_id = 0
+
+    def set_forward_region(self, forward_region: tuple[tuple[float, float], ...]) -> None:
+        """Set a manually calibrated image-relative forward corridor."""
+        if len(forward_region) != 4:
+            raise ValueError("forward_region must contain four trapezoid points")
+        self.forward_region = forward_region
 
     def detect(self, frame: Any) -> list[CollisionRisk]:
         """Return a LOW/MEDIUM/HIGH risk for each detected vehicle or person."""
@@ -174,12 +182,11 @@ class CollisionDetector:
                 if self._tracks[track_id].missed_frames > self.max_missed_frames:
                     del self._tracks[track_id]
 
-    @staticmethod
-    def _risk_level(track: _Track, width: int, height: int) -> str:
+    def _risk_level(self, track: _Track, width: int, height: int) -> str:
         bbox = track.bbox
         centre_x = (bbox[0] + bbox[2]) / (2.0 * width)
         bottom_y = bbox[3] / height
-        in_forward_region = CollisionDetector._inside_forward_region(centre_x, bottom_y)
+        in_forward_region = self._inside_forward_region(centre_x, bottom_y, self.forward_region)
         current_area = track.area_history[-1]
 
         # Outside-lane detections and very small targets remain LOW regardless of
@@ -204,8 +211,10 @@ class CollisionDetector:
         return "low"
 
     @staticmethod
-    def _inside_forward_region(x: float, y: float) -> bool:
-        (top_left_x, top_y), (top_right_x, _), (bottom_right_x, bottom_y), (bottom_left_x, _) = FORWARD_REGION
+    def _inside_forward_region(
+        x: float, y: float, forward_region: tuple[tuple[float, float], ...] = FORWARD_REGION
+    ) -> bool:
+        (top_left_x, top_y), (top_right_x, _), (bottom_right_x, bottom_y), (bottom_left_x, _) = forward_region
         if y < top_y or y > bottom_y:
             return False
         progress = (y - top_y) / (bottom_y - top_y)

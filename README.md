@@ -100,6 +100,12 @@ fixed, explainable heuristic rather than lane segmentation. Enable the browser
 checkbox or add `--show-forward-zone` to a CLI command only when explaining the
 collision-risk rule in a presentation.
 
+For a particular uploaded video, the browser demo also provides an optional
+manual forward-zone calibration panel. Its three sliders adjust the trapezoid's
+top height, top width, and bottom width; the chosen shape affects both the
+visible overlay and the qualitative forward-risk rule for that upload. It is a
+manual presentation aid, not automatic road/lane segmentation.
+
 Exported videos remove the original dashcam audio. Each confirmed warning adds
 three embedded beeps at the relevant point: fast for a red HIGH forward-collision
 warning, slower for yellow MEDIUM/road-hazard warnings, and none for green LOW

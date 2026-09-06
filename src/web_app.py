@@ -39,6 +39,18 @@ def _require_upload(upload: str | None, kind: str) -> Path:
     return source
 
 
+def _manual_forward_region(
+    top_y: float, top_half_width: float, bottom_half_width: float
+) -> tuple[tuple[float, float], ...]:
+    """Build a symmetric trapezoid from presentation-friendly slider values."""
+    return (
+        (0.5 - top_half_width, top_y),
+        (0.5 + top_half_width, top_y),
+        (0.5 + bottom_half_width, 0.98),
+        (0.5 - bottom_half_width, 0.98),
+    )
+
+
 def analyse_image(upload: str | None, show_forward_zone: bool) -> tuple[str, str, str]:
     """Run the existing image pipeline and return a browser-displayable result."""
     source = _require_upload(upload, "road image")
@@ -49,7 +61,14 @@ def analyse_image(upload: str | None, show_forward_zone: bool) -> tuple[str, str
     return str(destination), status, warning
 
 
-def analyse_video(upload: str | None, frame_stride: int, show_forward_zone: bool) -> tuple[str, str, str]:
+def analyse_video(
+    upload: str | None,
+    frame_stride: int,
+    show_forward_zone: bool,
+    top_y: float,
+    top_half_width: float,
+    bottom_half_width: float,
+) -> tuple[str, str, str]:
     """Run the existing sequential video pipeline and return its annotated video."""
     source = _require_upload(upload, "dashcam video")
     WEB_OUTPUTS.mkdir(parents=True, exist_ok=True)
@@ -60,6 +79,7 @@ def analyse_video(upload: str | None, frame_stride: int, show_forward_zone: bool
         _get_pipeline(),
         frame_stride=int(frame_stride),
         show_forward_zone=show_forward_zone,
+        forward_region=_manual_forward_region(top_y, top_half_width, bottom_half_width),
     )
     mode = "standard" if int(frame_stride) == 1 else f"fast demo (every {int(frame_stride)}th frame analysed)"
     return str(destination), f"Analysis complete using {mode} mode.", warning
@@ -108,12 +128,17 @@ def build_demo() -> gr.Blocks:
                 info="1 = analyse every frame (most reliable); 3–6 = recommended fast demo; 30 = rough preview only.",
             )
             video_zone = gr.Checkbox(label="Show forward-risk zone (presentation overlay)", value=False)
+            with gr.Accordion("Manually adjust forward-risk zone for this video", open=False):
+                gr.Markdown("This calibration changes the forward-risk rule for this upload; it is not automatic lane detection.")
+                zone_top_y = gr.Slider(0.35, 0.75, value=0.58, step=0.01, label="Top edge height")
+                zone_top_width = gr.Slider(0.05, 0.30, value=0.07, step=0.01, label="Top half-width")
+                zone_bottom_width = gr.Slider(0.20, 0.48, value=0.30, step=0.01, label="Bottom half-width")
             video_button = gr.Button("Analyse video", variant="primary")
             video_status = gr.Textbox(label="Status", interactive=False)
             video_warning = gr.Textbox(label="Highest confirmed warning", interactive=False)
             video_button.click(
                 analyse_video,
-                inputs=[video_input, frame_stride, video_zone],
+                inputs=[video_input, frame_stride, video_zone, zone_top_y, zone_top_width, zone_bottom_width],
                 outputs=[video_output, video_status, video_warning],
             )
 

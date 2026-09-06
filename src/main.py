@@ -183,12 +183,12 @@ class VideoHazardFilter:
         return confirmed
 
 
-def _draw_forward_region(frame) -> None:
+def _draw_forward_region(frame, forward_region=FORWARD_REGION) -> None:
     """Draw the image-space corridor used by the collision-risk heuristic."""
     height, width = frame.shape[:2]
     points = [
         (round(x * width), round(y * height))
-        for x, y in FORWARD_REGION
+        for x, y in forward_region
     ]
     cv2.polylines(frame, [np.array(points, dtype=np.int32)], True, (255, 255, 0), 2)
     cv2.putText(
@@ -214,10 +214,10 @@ def _draw_collision_risks(frame, collision_risks: list[CollisionRisk]) -> None:
         cv2.putText(frame, label, (x1 + 2, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
 
 
-def annotate_frame(frame, hazards, collision_risks, warning, show_forward_zone: bool = False):
+def annotate_frame(frame, hazards, collision_risks, warning, show_forward_zone: bool = False, forward_region=FORWARD_REGION):
     """Draw module outputs without coupling detector internals to OpenCV."""
     if show_forward_zone:
-        _draw_forward_region(frame)
+        _draw_forward_region(frame, forward_region)
     _draw_collision_risks(frame, collision_risks)
     for hazard in hazards:
         x1, y1, x2, y2 = hazard.bbox
@@ -285,6 +285,10 @@ def process_image(source: Path, destination: Path, pipeline, show_forward_zone: 
     frame = cv2.imread(str(source))
     if frame is None:
         raise ValueError(f"Could not read image: {source}")
+    # Browser requests reuse one pipeline, so restore the documented default
+    # after a manually calibrated video has been analysed.
+    if hasattr(pipeline[1], "set_forward_region"):
+        pipeline[1].set_forward_region(FORWARD_REGION)
     output, warning = process_frame_with_warning(frame, *pipeline, show_forward_zone=show_forward_zone)
     if not cv2.imwrite(str(destination), output):
         raise RuntimeError(f"Could not write output image: {destination}")
@@ -297,6 +301,7 @@ def process_video(
     pipeline,
     frame_stride: int = 1,
     show_forward_zone: bool = False,
+    forward_region=None,
 ) -> str:
     """Process a video, optionally reusing analysis between frames for a fast demo.
 
@@ -320,6 +325,9 @@ def process_video(
     # A video is a fresh scene; do not carry collision tracks from a prior image
     # or an earlier browser upload into its temporal risk assessment.
     road_hazard_detector, collision_detector, warning_manager = pipeline
+    active_forward_region = forward_region or FORWARD_REGION
+    if hasattr(collision_detector, "set_forward_region"):
+        collision_detector.set_forward_region(active_forward_region)
     if hasattr(collision_detector, "reset"):
         collision_detector.reset()
     hazard_filter = VideoHazardFilter()
@@ -362,7 +370,7 @@ def process_video(
             writer.write(
                 annotate_frame(
                     frame.copy(), latest_hazards, latest_collision_risks,
-                    latest_warning, show_forward_zone,
+                    latest_warning, show_forward_zone, active_forward_region,
                 )
             )
             frame_number += 1

@@ -258,7 +258,22 @@ def main() -> None:
         share=args.share,
         allowed_paths=[str(WEB_OUTPUTS)],
         theme=gr.themes.Soft(primary_hue="blue", secondary_hue="slate"),
-        css=".gradio-container {max-width: 1000px !important;} .notice {font-size: 0.95rem;}",
+        css="""
+        .gradio-container {
+            width: min(100% - 2rem, 1560px) !important;
+            max-width: 1560px !important;
+            padding: 1.25rem 0 2rem !important;
+        }
+        .notice { font-size: 0.95rem; }
+        @media (min-width: 1200px) {
+            .gradio-container { width: min(100% - 4rem, 1560px) !important; }
+        }
+        @media (max-width: 850px) {
+            .gradio-container { width: min(100% - 1rem, 1560px) !important; }
+            .gr-row { flex-wrap: wrap !important; }
+            .gr-row > * { min-width: 100% !important; }
+        }
+        """,
     )
 
 

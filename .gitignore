@@ -9,5 +9,18 @@ models/**/*.onnx
 outputs/*
 !outputs/.gitkeep
 
+# Downloaded checkpoints and training artifacts stay in Google Drive, not Git.
+*.pt
+*.onnx
+runs/
+weights/
+yolo*.pt
+
+# Local handovers are integration inputs. Their source has been merged into src/;
+# do not publish duplicate datasets, checkpoints, or teammate result folders.
+Member 2/
+Member 3/
+Member 4/
+
 # Raw datasets must remain outside this application repository.
 data/

@@ -18,3 +18,13 @@ ROAD_HAZARD_CONFIDENCE = 0.35
 # TODO(collision-team): set this when the collision model is available.
 COLLISION_WEIGHTS = MODELS_DIR / "collision" / "best.pt"
 COLLISION_CONFIDENCE = 0.40
+
+# Video-only road-hazard validation. A real hazard on the road should move
+# downwards and/or grow as the vehicle approaches it. This avoids presenting a
+# single, stationary windshield/dashboard reflection as a driver warning.
+# These safeguards deliberately do not alter still-image inference, where a
+# temporal check is impossible.
+ROAD_HAZARD_VIDEO_CONFIRMATION_FRAMES = 4
+ROAD_HAZARD_MIN_CENTRE_Y_CHANGE = 0.02
+ROAD_HAZARD_MIN_AREA_GROWTH = 1.10
+ROAD_HAZARD_DASHBOARD_EXCLUSION_Y = 0.92

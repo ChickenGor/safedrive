@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 import sys
 
@@ -17,14 +18,115 @@ from configs.config import (  # noqa: E402
     COLLISION_CONFIDENCE,
     COLLISION_WEIGHTS,
     OUTPUTS_DIR,
+    ROAD_HAZARD_DASHBOARD_EXCLUSION_Y,
     ROAD_HAZARD_CONFIDENCE,
+    ROAD_HAZARD_MIN_AREA_GROWTH,
+    ROAD_HAZARD_MIN_CENTRE_Y_CHANGE,
+    ROAD_HAZARD_VIDEO_CONFIRMATION_FRAMES,
     ROAD_HAZARD_WEIGHTS,
 )
 from collision.detector import CollisionDetector  # noqa: E402
-from road_hazard.detector import RoadHazardDetector  # noqa: E402
+from road_hazard.detector import HazardDetection, RoadHazardDetector  # noqa: E402
 from warning.warning_manager import WarningManager  # noqa: E402
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+
+@dataclass
+class _HazardTrack:
+    """Small video-only track used to validate a hazard before displaying it."""
+
+    label: str
+    first_detection: HazardDetection
+    last_detection: HazardDetection
+    observations: int = 1
+    last_seen_frame: int = 0
+    confirmed: bool = False
+
+
+class VideoHazardFilter:
+    """Suppress transient or stationary reflection-like hazard detections.
+
+    This is a conservative presentation safety layer, not a replacement for
+    retraining. A matching detection must be seen repeatedly and exhibit the
+    expected perspective change of a fixed object approached by the vehicle.
+    """
+
+    def __init__(
+        self,
+        confirmation_frames: int = ROAD_HAZARD_VIDEO_CONFIRMATION_FRAMES,
+        min_centre_y_change: float = ROAD_HAZARD_MIN_CENTRE_Y_CHANGE,
+        min_area_growth: float = ROAD_HAZARD_MIN_AREA_GROWTH,
+        dashboard_exclusion_y: float = ROAD_HAZARD_DASHBOARD_EXCLUSION_Y,
+    ) -> None:
+        self.confirmation_frames = confirmation_frames
+        self.min_centre_y_change = min_centre_y_change
+        self.min_area_growth = min_area_growth
+        self.dashboard_exclusion_y = dashboard_exclusion_y
+        self.frame_number = 0
+        self.tracks: list[_HazardTrack] = []
+
+    @staticmethod
+    def _iou(first: HazardDetection, second: HazardDetection) -> float:
+        """Calculate box overlap without making the detector depend on OpenCV."""
+        ax1, ay1, ax2, ay2 = first.bbox
+        bx1, by1, bx2, by2 = second.bbox
+        overlap_width = max(0, min(ax2, bx2) - max(ax1, bx1))
+        overlap_height = max(0, min(ay2, by2) - max(ay1, by1))
+        overlap = overlap_width * overlap_height
+        union = (ax2 - ax1) * (ay2 - ay1) + (bx2 - bx1) * (by2 - by1) - overlap
+        return overlap / union if union else 0.0
+
+    @staticmethod
+    def _area(detection: HazardDetection) -> float:
+        x1, y1, x2, y2 = detection.bbox
+        return max(0, x2 - x1) * max(0, y2 - y1)
+
+    def _has_forward_motion(self, track: _HazardTrack) -> bool:
+        """Check the perspective change expected from an approaching road object."""
+        first_centre = track.first_detection.centre_norm
+        current_centre = track.last_detection.centre_norm
+        if first_centre is None or current_centre is None:
+            return False
+        centre_moved_down = current_centre[1] - first_centre[1] >= self.min_centre_y_change
+        initial_area = self._area(track.first_detection)
+        area_grew = initial_area > 0 and self._area(track.last_detection) / initial_area >= self.min_area_growth
+        return centre_moved_down or area_grew
+
+    def filter(self, detections: list[HazardDetection]) -> list[HazardDetection]:
+        """Return only confirmed, non-dashboard detections for one video frame."""
+        self.frame_number += 1
+        self.tracks = [track for track in self.tracks if self.frame_number - track.last_seen_frame <= 2]
+        confirmed: list[HazardDetection] = []
+
+        for detection in detections:
+            # The lower edge of a dashcam frame commonly contains dashboard
+            # reflections rather than usable road surface.
+            if detection.bbox_norm is not None and detection.bbox_norm[3] >= self.dashboard_exclusion_y:
+                continue
+
+            candidates = [
+                track for track in self.tracks
+                if track.label == detection.label and self._iou(track.last_detection, detection) >= 0.30
+            ]
+            if candidates:
+                track = max(candidates, key=lambda item: self._iou(item.last_detection, detection))
+                track.last_detection = detection
+                track.last_seen_frame = self.frame_number
+                track.observations += 1
+            else:
+                track = _HazardTrack(detection.label, detection, detection, last_seen_frame=self.frame_number)
+                self.tracks.append(track)
+
+            if (
+                not track.confirmed
+                and track.observations >= self.confirmation_frames
+                and self._has_forward_motion(track)
+            ):
+                track.confirmed = True
+            if track.confirmed:
+                confirmed.append(detection)
+        return confirmed
 
 
 def annotate_frame(frame, hazards, warning):
@@ -54,8 +156,10 @@ def build_pipeline():
     )
 
 
-def process_frame(frame, road_hazard_detector, collision_detector, warning_manager):
+def process_frame(frame, road_hazard_detector, collision_detector, warning_manager, hazard_filter=None):
     hazards = road_hazard_detector.detect(frame)
+    if hazard_filter is not None:
+        hazards = hazard_filter.filter(hazards)
     collision_risks = collision_detector.detect(frame)
     warning = warning_manager.evaluate(hazards, collision_risks)
     return annotate_frame(frame.copy(), hazards, warning)
@@ -77,12 +181,13 @@ def process_video(source: Path, destination: Path, pipeline) -> None:
     width, height = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)), int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
     writer = cv2.VideoWriter(str(destination), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
+    hazard_filter = VideoHazardFilter()
     try:
         while True:
             ok, frame = capture.read()
             if not ok:
                 break
-            writer.write(process_frame(frame, *pipeline))
+            writer.write(process_frame(frame, *pipeline, hazard_filter=hazard_filter))
     finally:
         capture.release()
         writer.release()
